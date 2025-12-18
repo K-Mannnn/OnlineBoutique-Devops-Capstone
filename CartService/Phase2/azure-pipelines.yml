@@ -1,0 +1,110 @@
+
+
+trigger:
+  branches:
+    include:
+      - main
+      - dev
+      - feature
+
+
+pool:
+  vmImage: 'windows-latest'
+
+
+stages:
+  - stage: 'CI'
+    jobs:
+    - job: 'Build'
+      steps:
+      - task: DotNetCoreCLI@2
+        displayName: 'Restore nuget packages'
+        inputs:
+          command: 'restore'
+          projects: '**/*.csproj'
+
+
+      - task: DotNetCoreCLI@2
+        displayName: 'Build CartService'
+        inputs:
+          command: 'build'
+          projects: '**/*.csproj'
+          arguments: '--configuration Release'
+
+
+      - task: DotNetCoreCLI@2
+        displayName: 'Run unit Tests'
+        inputs:
+          command: 'test'
+          projects: '**/*Tests/*.csproj'
+
+
+      - task: DotNetCoreCLI@2
+        displayName: 'Publish CartService'
+        inputs:
+          command: 'publish'
+          publishWebProjects: false
+          projects: '**/*.csproj'
+          arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)'
+
+
+      - task: PublishBuildArtifacts@1
+        displayName: 'Publish build Artifacts'
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          ArtifactName: 'CartService'
+          publishLocation: 'Container'
+  
+  - stage: 'CD'
+    displayName: 'deploy to environment'
+    dependsOn: 'CI'
+    jobs:
+
+      # Deploy to Dev
+      - deployment: DeploytoDev
+        displayName: 'Deploy to Dev Environment'
+        environment: 'Dev'
+        condition: eq(variables['Build.SourceBranch'], 'refs/heads/dev')
+        strategy:
+          runOnce:
+            deploy:
+              steps: 
+                - download: current
+                  artifact: 'CartService'
+
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: 'ADO-Connection'
+                    appType: 'webApp'
+                    appName: 'OB-Dev'
+                    package: '$(Pipeline.Workspace)/CartService'
+                    deploymentMethod: 'auto'
+
+      # Deploy to Prod
+      - deployment: DeploytoProd
+        displayName: 'Deploy to Prod Environment'
+        environment: 'Prod'
+        condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+        strategy:
+          runOnce:
+            deploy:
+              steps: 
+                - download: current
+                  artifact: 'CartService'
+
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: 'ADO-Connection'
+                    appType: 'webApp'
+                    appName: 'OB-Prod-KM'
+                    package: '$(Pipeline.Workspace)/CartService'
+                    deploymentMethod: 'auto'
+
+
+
+
+ 
+
+            
+        
+
