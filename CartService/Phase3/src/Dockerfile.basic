@@ -1,0 +1,35 @@
+
+# ----------------
+# Build Stage
+# ----------------
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /app
+
+#copy project file and restore dependencies
+
+COPY cartservice.csproj .
+RUN dotnet restore
+
+#copy remianing source code and build
+
+COPY . .
+RUN dotnet publish -c release -o /app/publish
+
+# ----------------
+# Runtime Stage
+# ----------------
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+
+# Copy published ouitput from build stage
+
+COPY --from=build /app/publish .
+
+#Expose the port the app listens on
+Expose 7070
+
+
+#start the application
+ENTRYPOINT ["dotnet", "cartservice.dll"]
