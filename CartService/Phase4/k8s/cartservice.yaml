@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cartservice-deployment
+  labels:
+    app: cartservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cartservice
+  template:
+    metadata:
+      labels:
+        app: cartservice
+    spec:
+      containers:
+      - name: cartservice
+        image: obacrregistry123.azurecr.io/cartservice:latest
+
+        ports:
+        - containerPort: 7070
+        env:
+        - name: CARTSERVICE_USER
+          valueFrom:
+            secretKeyRef:
+              name: cartservice-secret
+              key: cartservice-user
+
+        - name: CARTSERVICE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cartservice-secret
+              key: cartservice-password
+        - name: REDIS_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: cartservice-config
+              key: REDIS_ADDR
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: cartservice
+spec:
+  type: NodePort
+  selector:
+    app: cartservice
+  ports:
+    - protocol: TCP
+      port: 7070
+      targetPort: 7070
+      nodePort: 30100

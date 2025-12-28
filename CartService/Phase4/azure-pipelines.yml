@@ -1,0 +1,115 @@
+
+trigger:
+  branches:
+    include:
+      - main
+      - dev
+      - feature
+
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables: 
+  imageName: 'cartservice'
+
+
+stages:
+
+  # ------------
+  # CI - Build Docker Image
+  # ------------
+  - stage: 'CI'
+    displayName: 'CI - Build Docker Image'
+    jobs:
+    - job: 'Build'
+      displayName: 'Build Docker Image'
+      steps:
+        - checkout: self
+
+
+        # Login to Azure
+        - task: AzureCLI@2
+          displayName: 'Login to ACR'
+          inputs:
+            azureSubscription: 'AKS-Connection'
+            scriptType: 'bash'
+            scriptLocation: 'inlineScript'
+            inlineScript: 'az acr login --name obacrregistry123'
+        
+        # Build Docker image using dockerfile.basic
+
+        - task: Docker@2
+          inputs:
+            repository: 'obacrregistry123.azurecr.io/$(imageName)'
+            command: 'buildAndPush'
+            Dockerfile: '**/Dockerfile.basic'
+            tags: |
+              $(Build.BuildId)
+              latest
+
+
+        
+  # -----------------
+  # CD Stage: Deploy to Azure App Service
+  # -----------------
+  - stage: CD
+    displayName: 'CD - Deploy Docker Image'
+    dependsOn: CI
+    jobs:
+
+      # Dev Deployment
+      - deployment: DeployToDev
+        displayName: 'Deploy to Dev'
+        environment: 'Dev'
+        condition: eq(variables['Build.SourceBranch'], 'refs/heads/dev')
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: KubernetesManifest@1
+                  displayName: 'Deploy to AKS'
+                  inputs:
+                    action: 'deploy'
+                    connectionType: 'azureResourceManager'
+                    azureSubscriptionConnection: 'AKS-Connection'
+                    azureResourceGroup: 'KM1-rg'
+                    kubernetesCluster: 'OB-AKS-Cluster'
+                    namespace: 'default'
+                    manifests: 'k8s/*.yaml'
+
+      # Prod Deployment
+      - deployment: DeployToProd
+        displayName: 'Deploy to Prod'
+        environment: 'Prod'
+        condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: KubernetesManifest@1
+                  displayName: 'Deploy to AKS'
+                  inputs:
+                    action: 'deploy'
+                    connectionType: 'azureResourceManager'
+                    azureSubscriptionConnection: 'AKS-Connection'
+                    azureResourceGroup: 'KM1-rg'
+                    kubernetesCluster: 'OB-AKS-Cluster'
+                    namespace: 'default'
+                    manifests: 'k8s/*.yaml'
+
+
+
+
+
+
+
+
+
+ 
+
+            
+        
+
